@@ -1,0 +1,17 @@
+service: outlandspawnshop
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-west-2
+
+functions:
+  outlandspawnshop:
+    handler: src/index.handler
+    events:
+      - http:
+          path: /
+          method: post
+
+plugins:
+  - serverless-offline

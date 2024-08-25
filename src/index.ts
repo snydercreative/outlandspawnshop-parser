@@ -1,4 +1,5 @@
 import fs from 'fs'
+import { Handler } from 'aws-lambda'
 
 type ProductType = {
 	id: number
@@ -15,9 +16,27 @@ type VendorType = {
 	stock: ProductType[]
 }
 
+export const handler: Handler = async (event: any) => {
+	const eventBody = event.body || event
+
+	if (eventBody.Records && eventBody.Records.length) {
+		const [eventRecord] = eventBody.Records
+		
+		console.log({
+			bucket: eventRecord.s3.bucket.name,
+			arn: eventRecord.s3.bucket.arn,
+			key: eventRecord.s3.object.key,
+		})		
+	}
+
+	// fs.readdir(FOLDER, readdirCallback)
+	
+	return eventBody
+}
+
 const FOLDER = "C:\\Program Files (x86)\\Ultima Online Outlands\\ClassicUO\\Data\\Client\\JournalLogs\\__scans"
 
-fs.readdir(FOLDER, readdirCallback)
+// fs.readdir(FOLDER, readdirCallback)
 
 function readdirCallback(err: NodeJS.ErrnoException | null, files: string[]) {
 	const sortedfFilenames = files.sort(() => -1)
