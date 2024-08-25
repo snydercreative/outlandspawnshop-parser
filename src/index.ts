@@ -1,23 +1,21 @@
 import fs from 'fs'
 
 type ProductType = {
-	price: string
+	id: number
+	price: number
 	description: string
+	seen: string
 }
 
 type VendorType = {
+	id: number,
 	name: string
+	coords: string | undefined
 	idx: number
 	stock: ProductType[]
 }
 
-(() => {
-	const FOLDER = "C:\\Program Files (x86)\\Ultima Online Outlands\\ClassicUO\\Data\\Client\\JournalLogs"
-
-	fs.readdir(FOLDER, readdirCallback)
-})()
-
-const FOLDER = "C:\\Program Files (x86)\\Ultima Online Outlands\\ClassicUO\\Data\\Client\\JournalLogs"
+const FOLDER = "C:\\Program Files (x86)\\Ultima Online Outlands\\ClassicUO\\Data\\Client\\JournalLogs\\__scans"
 
 fs.readdir(FOLDER, readdirCallback)
 
@@ -34,24 +32,35 @@ function readFileCallback(err: NodeJS.ErrnoException | null, data: Buffer) {
 
 	const readFileData = data.toString()
 	const lines = readFileData.split(/\r\n/)
-	const relevantLines = lines.filter((line: string) => line.lastIndexOf("…") > -1)
+
+	const relevantLines = lines.filter((line: string) => {
+		const locationPattern = /\(\d+,\s\d+,\s\d+\)/
+		const ellipsisPattern = /…/
+
+		return locationPattern.test(line) || ellipsisPattern.test(line)
+	})
+
 	const vendors: VendorType[] = processVendorLines(relevantLines)
 
-	vendors.forEach((vendor: VendorType, vendorIndex) => {	
+	vendors.forEach((vendor: VendorType, vendorIndex) => {
 		for (let i = vendor.idx; i < vendors[vendorIndex + 1]?.idx; i++) {
 			const relevantLine = relevantLines[i]
-
+			const itemInfo = relevantLine.split(':')[3]?.replace(' Price', '')
 			const productInfo = relevantLine.split('Price: ')[1]
+
 			if (productInfo) {
 				const priceRegex = /(^[\d,]+)/
-				const descriptionRegex = /([^\d,\s].+)\w+/
 
 				const [price] = priceRegex.exec(productInfo) || []
-				const [description] = descriptionRegex.exec(productInfo) || []
+				const description = productInfo
+
+				const shortDescription = description?.replace('item ID:Price: ', '')
 
 				vendor.stock.push({
-					price: price || '',
-					description: description || '',
+					id: parseInt(itemInfo.trim()),
+					price: parseInt(price?.replace(',', '') || '0') || 0,
+					description: shortDescription || '',
+					seen: (new Date()).toLocaleString()
 				})
 			}
 		}
@@ -60,25 +69,45 @@ function readFileCallback(err: NodeJS.ErrnoException | null, data: Buffer) {
 	const fileBuffer = Buffer.from(JSON.stringify(vendors))
 
 	fs.writeFile('data/test.json', fileBuffer, (err) => {
-		console.log({err})
-		console.log('Done.')
+		(err && console.log({ err })) || console.log('Done.')
 	})
+}
+
+function getCoordinates(line: string) {
+	const locationPattern = /\(\d+,\s\d+,\s\d+\)/
+
+	if (locationPattern.test(line)) {
+		const matches = locationPattern.exec(line)
+
+		return matches![0].replace('(', '').replace(')', '')
+	} else {
+		return ''
+	}
 }
 
 function processVendorLines(lines: string[]) {
 	const vendors: VendorType[] = []
+	let coords = ''
+	const vendorIDPattern = /\d+\s/
 
 	lines.map((line, idx) => {
-		const cleanLine = line.split('…')[1]
+		const cleanLine = line.split('…')[1] || line
 
-		if (cleanLine.lastIndexOf('vendorStart') > -1) {
+		if (cleanLine.indexOf('Current location is') > -1) {
+			coords = getCoordinates(line)
+		} else if (cleanLine.indexOf('vendorStart') > -1) {
 			const noVendorStart = cleanLine.replace('vendorStart ', '')
-			const noVendorIDs = noVendorStart.replace(/\d+\s/, '')
+			const noVendorIDs = noVendorStart.replace(vendorIDPattern, '')
 			const noDiscount = noVendorIDs.replace(/^\[.+\]\s/, '')
+			const vendorIDMatches = vendorIDPattern.test(noVendorStart) ? vendorIDPattern.exec(noVendorStart) : ''
+			const vendorID = parseInt(vendorIDMatches![0])
+
 
 			vendors.push({
 				name: noDiscount,
+				id: vendorID,
 				idx,
+				coords,
 				stock: [],
 			})
 		}
