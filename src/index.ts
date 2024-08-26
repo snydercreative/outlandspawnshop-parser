@@ -10,11 +10,17 @@ type ProductType = {
 }
 
 type VendorType = {
-	id: number,
+	id: number
 	name: string
-	coords: string | undefined
+	x: number
+	y: number
 	idx: number
 	stock: ProductType[]
+}
+
+type CoordsType = {
+	x: number
+	y: number
 }
 
 export const handler: Handler = async (event: any) => {
@@ -104,16 +110,24 @@ function getCoordinates(line: string) {
 
 	if (locationPattern.test(line)) {
 		const matches = locationPattern.exec(line)
+		const match = matches![0].replace('(', '').replace(')', '').replace(' ', '')
+		const [x, y] = match.split(',')
 
-		return matches![0].replace('(', '').replace(')', '')
+		return {
+			x: parseInt(x), 
+			y: parseInt(y),
+		}
 	} else {
-		return ''
+		return {
+			x: 0,
+			y: 0,
+		}
 	}
 }
 
 function processVendorLines(lines: string[]) {
 	const vendors: VendorType[] = []
-	let coords = ''
+	let coords: CoordsType
 	const vendorIDPattern = /\d+\s/
 
 	lines.map((line, idx) => {
@@ -127,13 +141,14 @@ function processVendorLines(lines: string[]) {
 			const noDiscount = noVendorIDs.replace(/^\[.+\]\s/, '')
 			const vendorIDMatches = vendorIDPattern.test(noVendorStart) ? vendorIDPattern.exec(noVendorStart) : ''
 			const vendorID = parseInt(vendorIDMatches![0])
-
+			const { x, y } = coords
 
 			vendors.push({
 				name: noDiscount,
 				id: vendorID,
 				idx,
-				coords,
+				x, 
+				y,
 				stock: [],
 			})
 		}
