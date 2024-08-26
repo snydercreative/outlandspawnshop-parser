@@ -1,7 +1,7 @@
 {
   "name": "shadows-market",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "out/index.js",
   "scripts": {
     "start": "nodemon --ignore ./data/ ./src/index.ts",
     "sls": "npx tsc && nodemon -e ts,js --exec \"serverless offline --httpPort 8081\""
@@ -22,5 +22,8 @@
     "serverless-offline": {
       "serverless": "$serverless"
     }
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.637.0"
   }
 }

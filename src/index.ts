@@ -1,11 +1,12 @@
-import fs from 'fs'
 import { Handler } from 'aws-lambda'
+import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 
 type ProductType = {
 	id: number
 	price: number
 	description: string
-	seen: string
+	seen: number
+	vendorId: number
 }
 
 type VendorType = {
@@ -21,36 +22,45 @@ export const handler: Handler = async (event: any) => {
 
 	if (eventBody.Records && eventBody.Records.length) {
 		const [eventRecord] = eventBody.Records
-		
-		console.log({
-			bucket: eventRecord.s3.bucket.name,
-			arn: eventRecord.s3.bucket.arn,
-			key: eventRecord.s3.object.key,
-		})		
-	}
 
-	// fs.readdir(FOLDER, readdirCallback)
+		const client = new S3Client({
+			region: 'us-west-2'
+		})
+
+		const getObjectCommand = new GetObjectCommand({
+			Bucket: eventRecord.s3.bucket.name,
+			Key: decodeURIComponent(eventRecord.s3.object.key).replace(/\+/g, ' '),
+		})
+
+		const data = await client.send(getObjectCommand)
+		const body = await data.Body?.transformToString() || ''
 	
-	return eventBody
+		const vendors = parseVendors(body)
+
+		const putObjectCommand = new PutObjectCommand({
+			Bucket: 'outlands-pawnshop-persistence',
+			Key: `vendor-census-${getFilenameDate()}.json`,
+			ContentType: 'application/json',
+			Body: JSON.stringify(vendors),
+		})
+
+		const putInfo = await client.send(putObjectCommand)
+
+		console.log({putInfo})
+
+		return putInfo
+	}
 }
 
-const FOLDER = "C:\\Program Files (x86)\\Ultima Online Outlands\\ClassicUO\\Data\\Client\\JournalLogs\\__scans"
+function getFilenameDate() {
+	const now = new Date()
+	const twoDigitMonth = now.getMonth() + 1 < 10 ? `0${now.getMonth() + 1}` : `${now.getMonth() + 1}`
 
-// fs.readdir(FOLDER, readdirCallback)
-
-function readdirCallback(err: NodeJS.ErrnoException | null, files: string[]) {
-	const sortedfFilenames = files.sort(() => -1)
-	const latestFile = sortedfFilenames.length && sortedfFilenames[0]
-	const pathToLatestFile = `${FOLDER}/${latestFile}`
-
-	fs.readFile(pathToLatestFile, readFileCallback)
+	return `${now.getFullYear()}-${twoDigitMonth}-${now.getDate()}:${now.getMilliseconds()}`
 }
 
-function readFileCallback(err: NodeJS.ErrnoException | null, data: Buffer) {
-	if (err) console.log(err)
-
-	const readFileData = data.toString()
-	const lines = readFileData.split(/\r\n/)
+function parseVendors(body: string) {
+	const lines = body.split(/\r\n/)
 
 	const relevantLines = lines.filter((line: string) => {
 		const locationPattern = /\(\d+,\s\d+,\s\d+\)/
@@ -79,17 +89,14 @@ function readFileCallback(err: NodeJS.ErrnoException | null, data: Buffer) {
 					id: parseInt(itemInfo.trim()),
 					price: parseInt(price?.replace(',', '') || '0') || 0,
 					description: shortDescription || '',
-					seen: (new Date()).toLocaleString()
+					seen: (new Date()).getTime(),
+					vendorId: vendor.id,
 				})
 			}
 		}
 	})
 
-	const fileBuffer = Buffer.from(JSON.stringify(vendors))
-
-	fs.writeFile('data/test.json', fileBuffer, (err) => {
-		(err && console.log({ err })) || console.log('Done.')
-	})
+	return vendors
 }
 
 function getCoordinates(line: string) {
