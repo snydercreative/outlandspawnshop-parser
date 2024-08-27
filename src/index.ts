@@ -5,7 +5,7 @@ type ProductType = {
 	id: number
 	price: number
 	description: string
-	seen: number
+	quantity: number
 	vendorId: number
 }
 
@@ -80,22 +80,24 @@ function parseVendors(body: string) {
 	vendors.forEach((vendor: VendorType, vendorIndex) => {
 		for (let i = vendor.idx; i < vendors[vendorIndex + 1]?.idx; i++) {
 			const relevantLine = relevantLines[i]
-			const itemInfo = relevantLine.split(':')[3]?.replace(' Price', '')
+			const splitRelevantLine = relevantLine.split(':')
+			const productId = splitRelevantLine[3]?.replace(' Price', '')						
+			const lineWithoutParens = relevantLine.replace(/\(.+\)/g, '').trim()
+			const isQuantity = /\:\s\d+$/.test(lineWithoutParens)
+			const quantity = isQuantity ? parseInt(/\:\s\d+$/.exec(lineWithoutParens)![0].replace(': ', '')) : 1
 			const productInfo = relevantLine.split('Price: ')[1]
 
 			if (productInfo) {
 				const priceRegex = /(^[\d,]+)/
-
 				const [price] = priceRegex.exec(productInfo) || []
 				const description = productInfo
-
 				const shortDescription = description?.replace('item ID:Price: ', '')
-
+				
 				vendor.stock.push({
-					id: parseInt(itemInfo.trim()),
+					id: parseInt(productId.trim()),
 					price: parseInt(price?.replace(',', '') || '0') || 0,
 					description: shortDescription || '',
-					seen: (new Date()).getTime(),
+					quantity,
 					vendorId: vendor.id,
 				})
 			}
