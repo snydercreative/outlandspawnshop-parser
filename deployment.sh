@@ -18,7 +18,7 @@ echo "Installing node modules..."
 npm i
 
 echo "Zipping 'dist' folder into 'out' folder..."
-7z a ../out/outlands-pawnshop-parser.zip -r .
+7z a ../out/outlands-pawnshop-parser.zip -r . > /dev/null
 
 echo "Copying zip to s3..."
 aws s3 cp ../out/outlands-pawnshop-parser.zip s3://outlands-pawnshop-lambda-zips

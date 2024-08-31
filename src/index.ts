@@ -14,6 +14,7 @@ type VendorType = {
 	name: string
 	x: number
 	y: number
+	z: number
 	idx: number
 	stock: ProductType[]
 }
@@ -21,26 +22,26 @@ type VendorType = {
 type CoordsType = {
 	x: number
 	y: number
+	z: number
 }
 
 export const handler: Handler = async (event: any) => {
-	const eventBody = event.body || event
+	const eventBody = JSON.parse(event.body || event)
 
 	if (eventBody.Records && eventBody.Records.length) {
 		const [eventRecord] = eventBody.Records
-
+		
 		const client = new S3Client({
 			region: 'us-west-2'
 		})
-
+		
 		const getObjectCommand = new GetObjectCommand({
 			Bucket: eventRecord.s3.bucket.name,
 			Key: decodeURIComponent(eventRecord.s3.object.key).replace(/\+/g, ' '),
 		})
-
+		
 		const data = await client.send(getObjectCommand)
 		const body = await data.Body?.transformToString() || ''
-	
 		const vendors = parseVendors(body)
 
 		const putObjectCommand = new PutObjectCommand({
@@ -49,10 +50,8 @@ export const handler: Handler = async (event: any) => {
 			ContentType: 'application/json',
 			Body: JSON.stringify(vendors),
 		})
-
+		
 		const putInfo = await client.send(putObjectCommand)
-
-		console.log({putInfo})
 
 		return putInfo
 	}
@@ -62,7 +61,7 @@ function getFilenameDate() {
 	const now = new Date()
 	const twoDigitMonth = now.getMonth() + 1 < 10 ? `0${now.getMonth() + 1}` : `${now.getMonth() + 1}`
 
-	return `${now.getFullYear()}-${twoDigitMonth}-${now.getDate()}:${now.getMilliseconds()}`
+	return `${now.getFullYear()}-${twoDigitMonth}-${now.getDate()}:${now.getTime()}`
 }
 
 function parseVendors(body: string) {
@@ -77,14 +76,17 @@ function parseVendors(body: string) {
 
 	const vendors: VendorType[] = processVendorLines(relevantLines)
 
+	const quantityRegex = /\:\s\d+$/
+	const parensRegex = /\(.+\)/g
+
 	vendors.forEach((vendor: VendorType, vendorIndex) => {
 		for (let i = vendor.idx; i < vendors[vendorIndex + 1]?.idx; i++) {
 			const relevantLine = relevantLines[i]
 			const splitRelevantLine = relevantLine.split(':')
 			const productId = splitRelevantLine[3]?.replace(' Price', '')						
-			const lineWithoutParens = relevantLine.replace(/\(.+\)/g, '').trim()
-			const isQuantity = /\:\s\d+$/.test(lineWithoutParens)
-			const quantity = isQuantity ? parseInt(/\:\s\d+$/.exec(lineWithoutParens)![0].replace(': ', '')) : 1
+			const lineWithoutParens = relevantLine.replace(parensRegex, '').trim()
+			const isQuantity = quantityRegex.test(lineWithoutParens)
+			const quantity = isQuantity ? parseInt(quantityRegex.exec(lineWithoutParens)![0].replace(': ', '')) : 1
 			const productInfo = relevantLine.split('Price: ')[1]
 
 			if (productInfo) {
@@ -112,17 +114,19 @@ function getCoordinates(line: string) {
 
 	if (locationPattern.test(line)) {
 		const matches = locationPattern.exec(line)
-		const match = matches![0].replace('(', '').replace(')', '').replace(' ', '')
-		const [x, y] = match.split(',')
+		const match = matches![0].replace(/[\(\)\s]/g, '')
+		const [x, y, z] = match.split(',')
 
 		return {
 			x: parseInt(x), 
 			y: parseInt(y),
+			z: parseInt(z),
 		}
 	} else {
 		return {
 			x: 0,
 			y: 0,
+			z: 0,
 		}
 	}
 }
@@ -143,7 +147,7 @@ function processVendorLines(lines: string[]) {
 			const noDiscount = noVendorIDs.replace(/^\[.+\]\s/, '')
 			const vendorIDMatches = vendorIDPattern.test(noVendorStart) ? vendorIDPattern.exec(noVendorStart) : ''
 			const vendorID = parseInt(vendorIDMatches![0])
-			const { x, y } = coords
+			const { x, y, z } = coords
 
 			vendors.push({
 				name: noDiscount,
@@ -151,6 +155,7 @@ function processVendorLines(lines: string[]) {
 				idx,
 				x, 
 				y,
+				z,
 				stock: [],
 			})
 		}

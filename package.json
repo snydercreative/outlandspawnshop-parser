@@ -4,7 +4,7 @@
   "main": "out/index.js",
   "scripts": {
     "start": "nodemon --ignore ./data/ ./src/index.ts",
-    "sls": "npx tsc && nodemon -e ts,js --exec \"serverless offline --httpPort 8081\""
+    "sls": "nodemon -e ts,js --exec \"npx tsc && serverless offline --httpPort 8081\""
   },
   "author": "",
   "license": "",
